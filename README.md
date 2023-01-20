@@ -1,4 +1,4 @@
-# masked-generative-music-transformer
+# Masked Generative Music Transformer
 
 This project applies the techniques from MaskGIT [1] / Muse [2] to symbolic music.
 
@@ -7,13 +7,13 @@ This project applies the techniques from MaskGIT [1] / Muse [2] to symbolic musi
 
 We currently use simple piano rolls of size 36 pitches X 32 timesteps as our target representation.
 
-The goal of the project is to apply various techniques to guide the music generation process, such as:
-- Scale/Rhythm constraints during sampling.
+The goal of the project is to apply a pretrained model to tasks such as:
+- Scale/Rhythm constrained generation.
 - "Genre" conditioning.
-- "Style" conditioning.
-- Velocity generation.
+- Velocity generation..
+- Microtiming generation etc..
 
-We are currently working on applying the model to other music representations.
+We are also working on applying the model to other music representations.
 
 An Arxiv paper is on the way.
 
