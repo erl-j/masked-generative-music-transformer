@@ -1,6 +1,6 @@
 # Masked Generative Music Transformer
 
-This project applies the techniques from MaskGIT [1] / Muse [2] to symbolic music.
+This project applies techniques from MaskGIT [1] / Muse [2] to symbolic music.
 
 ![](misc/gen.gif)
 
