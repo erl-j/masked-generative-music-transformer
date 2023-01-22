@@ -218,6 +218,7 @@ class Model(pl.LightningModule):
         if plot == True:
 
             # globally set colormap to viridis
+        
             
             fig,ax = plt.subplots(1,5,figsize=(15,5))
             ax[0].imshow(flat_x[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
@@ -311,3 +312,15 @@ if __name__ == "__main__":
 
     trainer.fit(model, dl)
 
+        
+
+
+
+
+
+
+    
+# # %%
+
+# %%
+#

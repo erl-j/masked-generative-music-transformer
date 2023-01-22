@@ -39,8 +39,26 @@ def has_simulateneous_neighbouring_notes(roll):
     two_note_sum = padded_roll + np.roll(padded_roll,1,0)
     return (np.max(two_note_sum)>1)
 
+def piano_roll_to_note_seq(piano_roll):
+    notes={}
+    for pitch in range(piano_roll.shape[0]):
+        for time in range(piano_roll.shape[1]):
+            if piano_roll[pitch,time] > 0:
+                if pitch not in notes:
+                    notes[pitch] = []
+                notes[pitch].append({"pitch":pitch,"start":time,"end":time+1,"velocity":piano_roll[pitch,time]})
+            if piano_roll[pitch,time] == 0 and pitch in notes and len(notes[pitch]) > 0 and notes[pitch][-1]["end"] == time:
+                notes[pitch][-1]["end"] = time+1
+    note_seq = []
+    for pitch in notes:
+        for note in notes[pitch]:
+            note_seq.append(note)
+    note_seq = sorted(note_seq,key=lambda x: x["start"])
+    return note_seq
+    
 class MidiDataset(torch.utils.data.Dataset):
-    def __init__(self,midi_filepaths=None, prepared_data_path = None, crop_size=None,downsample_factor=1, only_88_keys=True):
+    def __init__(self,midi_filepaths=None, prepared_data_path = None, crop_size=None,downsample_factor=1, only_88_keys=True, mode="piano_roll"):
+        self.mode = mode
         self.crop_size=crop_size
         self.downsample_factor = downsample_factor
         self.N_STEPS=64
@@ -103,6 +121,13 @@ class MidiDataset(torch.utils.data.Dataset):
 
         print("Filtered to {} after removing duplicates".format(len(self.data)))
 
+        if self.mode == "note_seq":
+            for i in tqdm(range(len(self.data))):
+                self.data[i]["dim_source_roll"] = self.data[i]["piano_roll"].shape
+                self.data[i]["note_seq"] = piano_roll_to_note_seq(self.data[i]["piano_roll"])
+                self.data[i]["piano_roll"] = None
+ 
+       
     def __getitem__(self, idx):
         example = self.data[idx]
 
@@ -220,5 +245,3 @@ class MidiDataset(torch.utils.data.Dataset):
         
         return piano_roll
     
-
-# %%
