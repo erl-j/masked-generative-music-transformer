@@ -34,7 +34,7 @@ def token_loss(target_indices,logits,mask,channel_vocab_sizes=[{"null",2},{"pitc
                     if (mask[batch,target_token_index] == mask[batch,predicted_token_index]).all():
                         if((target_indices[batch,target_token_index]+1)*(1-mask) == (target_indices[batch,predicted_token_index]+1)*(1-mask)).all():
                             candidate_list.append(target_token_index)
-
+            
                     for channel_idx, channel_vocab_size in channel_vocab_sizes:
                         if mask[batch,target_token_index,channel_idx] == 1:
                             one_hots=[]

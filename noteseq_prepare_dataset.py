@@ -2,7 +2,7 @@ from midi_dataset import MidiDataset
 import glob
 import torch
 
-dataset = "vast+gamer"
+dataset = "gamer"
 
 CROP_SIZE = 36
 DOWNSAMPLE_FACTOR = 1
@@ -11,6 +11,7 @@ MODE= "note_seq"
 dss = []
 if dataset == "gamer":
     ds = MidiDataset(prepared_data_path="data/prepared_gamer_data.pt",crop_size=CROP_SIZE,downsample_factor=DOWNSAMPLE_FACTOR,mode="note_seq")
+    ds.save_data("data/prepared_gamer_noteseq_data.pt")
     dss.append(ds)
 if (dataset == "vast") or (dataset == "vast+gamer"):
     fps = glob.glob("data/vast/*.pt")

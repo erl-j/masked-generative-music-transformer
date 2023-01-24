@@ -17,17 +17,6 @@ from torch.nn import functional as F
 from model import TransformerModel, MLPModel
 import glob
 
-def piano_roll_to_model_format( piano_roll):
-    on = (piano_roll>0).float()
-    off = (piano_roll==0).float()
-    return torch.stack([on,off],dim=-1)
-    
-def model_format_to_piano_roll(onoff):
-    on = onoff[:,:,:,0]
-    off = onoff[:,:,:,1]
-    assert torch.all(on+off==1)
-    return on*127.0
-
 class Model(pl.LightningModule):
     def __init__(self, n_pitches,n_timesteps, architecture="transformer",n_layers=None,n_hidden_size=None):
         super().__init__()

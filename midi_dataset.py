@@ -244,4 +244,41 @@ class MidiDataset(torch.utils.data.Dataset):
         piano_roll = midi.get_piano_roll(fs=1/sampling_step_time,times=np.arange(first_beat_time,last_end+midi.tick_to_time(quarter_length),sampling_step_time))
         
         return piano_roll
-    
+
+
+class NoteSeqDataset(torch.utils.data.Dataset):
+    def __init__(self, prepared_data_path, crop_size=None):
+        self.crop_size = crop_size
+        self.load_data(prepared_data_path)
+
+    def load_data(self, path):
+        self.data = torch.load(path).data
+
+    def __getitem__(self, idx):
+        example = self.data[idx]
+        note_seq = example["note_seq"].copy()
+
+        # get min and max pitch
+        min_pitch = np.min([note["pitch"] for note in note_seq])
+        max_pitch = np.max([note["pitch"] for note in note_seq])
+
+        low = min(max_pitch-self.crop_size,min_pitch)
+        high = max(max_pitch-self.crop_size,min_pitch)
+
+        if low==high:
+            start_pitch = low
+        else:
+            start_pitch = np.random.randint(low=low,high=high)
+     
+        end_pitch = start_pitch+self.crop_size
+
+        # remove all notes outside of range and shift pitch to start at 0
+        note_seq = [note for note in note_seq if note["pitch"] >= start_pitch and note["pitch"] < end_pitch]
+        for note in note_seq:
+            note["pitch"] -= start_pitch
+        
+        return {**example,"note_seq":note_seq}
+        
+
+    def __len__(self):
+        return len(self.data)

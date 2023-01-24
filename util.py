@@ -46,3 +46,9 @@ def get_onsets(rolls):
     return (np.diff(rolls,prepend=0,axis=-1)>0).astype(np.int32)
 
 
+def noteseq_to_roll(note_seq,n_pitches,n_timesteps):
+    roll = np.zeros((n_pitches,n_timesteps))
+    for note in note_seq:
+        roll[note["pitch"],note["start"]:note["end"]] = note["velocity"]
+    return roll
+
