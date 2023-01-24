@@ -304,8 +304,9 @@ if __name__ == "__main__":
 
     wandb_logger = WandbLogger()
     
-    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],gpus=[2],log_every_n_steps=1)
-    model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, architecture="transformer",n_layers=4,n_hidden_size=512)
+    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],gpus=[1],log_every_n_steps=1)
+    model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, architecture="transformer",n_layers=4,n_hidden_size=256)
+    # model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, architecture="transformer",n_layers=2,n_hidden_size=256)
 
     #model.load_state_dict(torch.load("lightning_logs/1x3pz8xi/checkpoints/epoch=27-step=15764.ckpt")["state_dict"])
 

@@ -126,7 +126,7 @@ class TransformerModel(torch.nn.Module):
         return y, y_prob
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=2e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=2e-5)
         return optimizer
 
 class MLPModel(torch.nn.Module):

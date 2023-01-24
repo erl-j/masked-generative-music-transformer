@@ -33,7 +33,6 @@ ckpt_path =glob.glob("lightning_logs/2rv228sb/checkpoints/*.ckpt")[0]
 #ckpt_path =glob.glob("lightning_logs/2c1uhoqg/checkpoints/*.ckpt")[0]
 # n_layers = 5, n_hidden_size = 256
 
-
 #%%
 # test
 model.eval()

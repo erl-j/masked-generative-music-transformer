@@ -9,10 +9,9 @@ import onnx
 import onnxruntime as ort
 import numpy as np
 
-
-model = Model(n_pitches=36,n_timesteps=32, architecture = "transformer",n_layers=4,n_hidden_size=512)
-ckpt_path =glob.glob("lightning_logs/2mov0b71/checkpoints/*.ckpt")[0] 
-name = "guillaume3"
+# model = Model(n_pitches=36,n_timesteps=32, architecture = "transformer",n_layers=4,n_hidden_size=512)
+# ckpt_path =glob.glob("lightning_logs/2mov0b71/checkpoints/*.ckpt")[0] 
+# name = "guillaume4"
 
 # model = Model(n_pitches=36,n_timesteps=32, architecture = "transformer",n_layers=3,n_hidden_size=128)
 # ckpt_path =glob.glob("lightning_logs/1cubm9kd/checkpoints/*.ckpt")[0]

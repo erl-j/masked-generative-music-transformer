@@ -21,4 +21,4 @@ if (dataset == "vast") or (dataset == "vast+gamer"):
 ds = torch.utils.data.ConcatDataset(dss)
 
 # save dataset
-torch.save(ds,"data/prepared_vgm+game_noteseq_data.pt".format(dataset))
+torch.save(ds,f"data/prepared_{dataset}_noteseq_data.pt")
