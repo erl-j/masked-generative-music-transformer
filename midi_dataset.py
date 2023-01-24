@@ -9,7 +9,6 @@ import numpy as np
 import pretty_midi
 import soundfile as sf
 import torch
-from IPython.display import Audio, display
 from PIL import Image
 from tqdm import tqdm
 
@@ -246,6 +245,39 @@ class MidiDataset(torch.utils.data.Dataset):
         return piano_roll
 
 
+def onehot(idx,n_values):
+    onehot = np.zeros(n_values)
+    onehot[idx]=1
+    return onehot
+
+def noteseq_to_model_format(note_sequence, n_pitches,n_timesteps, sequence_length):
+    """
+    Converts a note sequence to a model input format.
+    """
+    output=[]
+    for step_index in range(sequence_length):
+        step=[]
+
+        if step_index < len(note_sequence):
+            # type section
+            step.append(onehot(0,2))
+            # pitch section
+            step.append(onehot(step["pitch"],n_pitches))
+            # onset section
+            step.append(onehot(step["start"],n_timesteps))
+            # duration section
+            duration = step["end"]-step["start"]
+            step.append(onehot(duration, n_timesteps))
+        else:
+            step.append(onehot(1,2))
+            step.append(onehot(0,n_pitches)*0)
+            step.append(onehot(0,n_timesteps)*0)
+            step.append(onehot(0, n_timesteps)*0)
+        output.append(np.concat(step))
+    output = np.stack(output)
+    return output
+
+
 class NoteSeqDataset(torch.utils.data.Dataset):
     def __init__(self, prepared_data_path, crop_size=None):
         self.crop_size = crop_size
@@ -256,6 +288,10 @@ class NoteSeqDataset(torch.utils.data.Dataset):
 
     def load_data(self, path):
         self.data = torch.load(path)
+
+    def get_token_sections(self):
+        return [{"label":"type","n_channels":2},{"label":"pitch","n_channels":n_pitches},{"label":"onset","time_channels":n_timesteps},{"label":"duration","n_channels":n_timesteps}]
+
 
     def __getitem__(self, idx):
         example = self.data[idx]
@@ -279,8 +315,10 @@ class NoteSeqDataset(torch.utils.data.Dataset):
         note_seq = [note for note in note_seq if note["pitch"] >= start_pitch and note["pitch"] < end_pitch]
         for note in note_seq:
             note["pitch"] -= start_pitch
+
+        seq = noteseq_to_model_format(note_seq,36,64,128)
         
-        return {**example,"note_seq":note_seq}
+        return {**example,"note_seq":note_seq,"seq":seq}
         
 
     def __len__(self):
