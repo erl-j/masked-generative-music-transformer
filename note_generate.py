@@ -36,15 +36,18 @@ def play_roll(roll):
     play_audio(audio)
 
 #%%
-ds = NoteSeqDataset(prepared_data_path="data/noteseq_prepared_gamer_data.pt", crop_size=36)
-#%%
+ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data.pt", crop_size=36)
+
 idx = np.random.randint(0,len(ds))
 
+print(ds.data[idx])
+
+#%%
+ns = ds[idx]["note_seq"]
+print(ns)
 
 #%%
 
-ns = ds[idx]["note_seq"]
-print(ns)
 
 for n in ns:
     print(n["pitch"])
@@ -57,8 +60,6 @@ plt.show()
 
 roll = torch.tensor(roll).float()
 play_roll(roll)
-
-
 
 #%%
 

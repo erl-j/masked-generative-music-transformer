@@ -40,19 +40,19 @@ def has_simulateneous_neighbouring_notes(roll):
     return (np.max(two_note_sum)>1)
 
 def piano_roll_to_note_seq(piano_roll):
-    notes={}
+    note_seq=[]
     for pitch in range(piano_roll.shape[0]):
+        current_note = None
         for time in range(piano_roll.shape[1]):
             if piano_roll[pitch,time] > 0:
-                if pitch not in notes:
-                    notes[pitch] = []
-                notes[pitch].append({"pitch":pitch,"start":time,"end":time+1,"velocity":piano_roll[pitch,time]})
-            if piano_roll[pitch,time] == 0 and pitch in notes and len(notes[pitch]) > 0 and notes[pitch][-1]["end"] == time:
-                notes[pitch][-1]["end"] = time+1
-    note_seq = []
-    for pitch in notes:
-        for note in notes[pitch]:
-            note_seq.append(note)
+                if current_note is None:
+                    current_note = {"pitch":pitch,"start":time,"end":time+1,"velocity":piano_roll[pitch,time]}
+                else:
+                    current_note["end"] += 1
+            else:
+                if current_note is not None:
+                    note_seq.append(current_note)
+                    current_note = None
     note_seq = sorted(note_seq,key=lambda x: x["start"])
     return note_seq
     
@@ -252,7 +252,7 @@ class NoteSeqDataset(torch.utils.data.Dataset):
         self.load_data(prepared_data_path)
 
     def load_data(self, path):
-        self.data = torch.load(path).data
+        self.data = torch.load(path)
 
     def __getitem__(self, idx):
         example = self.data[idx]
@@ -282,3 +282,4 @@ class NoteSeqDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.data)
+# %%

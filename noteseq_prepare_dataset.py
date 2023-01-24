@@ -19,7 +19,7 @@ if (dataset == "vast") or (dataset == "vast+gamer"):
         ds = MidiDataset(prepared_data_path=fp,crop_size=CROP_SIZE,downsample_factor=DOWNSAMPLE_FACTOR,mode="note_seq")
         dss.append(ds)
 
-ds = torch.utils.data.ConcatDataset(dss)
+#ds = torch.utils.data.ConcatDataset(dss)
 
 # save dataset
-torch.save(ds,f"data/prepared_{dataset}_noteseq_data.pt")
+#torch.save(ds,f"data/prepared_{dataset}_noteseq_data.pt")
