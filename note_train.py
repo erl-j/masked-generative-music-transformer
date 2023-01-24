@@ -17,6 +17,44 @@ from torch.nn import functional as F
 from model import TransformerModel, MLPModel
 import glob
 
+def encode_pitch(pitch,n_pitches):
+    """
+    Encodes a pitch to an integer.
+    """
+    one_hot = np.zeros(n_pitches)
+    one_hot[pitch] = 1
+    return one_hot
+def encode_time(time,max_timesteps):
+    """
+    Encodes a time to an integer.
+    """
+    one_hot = np.zeros(max_timesteps)
+    one_hot[time] = 1
+    return one_hot
+
+def encode_channel_type(is_note):
+    """
+    Encodes a channel type to an integer.
+    """
+    one_hot = np.zeros(2)
+    if is_note:
+        one_hot[1] = 1
+    return one_hot
+
+
+def noteseq_to_model_format(ns, n_timesteps, n_pitches, max_notes:
+    """
+    Converts a note sequence to a model input format.
+    """
+    # get size of token
+
+    
+
+
+    out = np.zeros((n_timesteps,n_pitches))
+   
+
+
 class Model(pl.LightningModule):
     def __init__(self, n_pitches,n_timesteps, architecture="transformer",n_layers=None,n_hidden_size=None):
         super().__init__()

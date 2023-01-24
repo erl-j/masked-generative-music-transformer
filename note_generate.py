@@ -38,28 +38,19 @@ def play_roll(roll):
 #%%
 ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data.pt", crop_size=36)
 
-idx = np.random.randint(0,len(ds))
+import matplotlib.pyplot as plt
 
-print(ds.data[idx])
 
 #%%
-ns = ds[idx]["note_seq"]
-print(ns)
+plt.hist([len(d["note_seq"]) for d in ds],bins=100)
+
 
 #%%
+#%%
 
+# compute average note sequence length
+note_seq_lengths = [len(d["note_seq"]) for d in ds]
 
-for n in ns:
-    print(n["pitch"])
-print(f"max pitch {max([n['pitch'] for n in ns])}")
-roll = noteseq_to_roll(ns,36,64)
-
-
-plt.imshow(roll)
-plt.show()
-
-roll = torch.tensor(roll).float()
-play_roll(roll)
 
 #%%
 

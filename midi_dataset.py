@@ -250,6 +250,9 @@ class NoteSeqDataset(torch.utils.data.Dataset):
     def __init__(self, prepared_data_path, crop_size=None):
         self.crop_size = crop_size
         self.load_data(prepared_data_path)
+        # filter away noteseq of length 0
+        self.data = [example for example in self.data if len(example["note_seq"]) > 0]
+        
 
     def load_data(self, path):
         self.data = torch.load(path)
