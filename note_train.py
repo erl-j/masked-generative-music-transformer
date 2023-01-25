@@ -17,22 +17,20 @@ from torch.nn import functional as F
 from note_model import TransformerModel
 import glob
 
-
-
 # make generic so that it accepts a graph with dependencies between the various events/sections
 # also rewrite with better use of tensor operations.
 # recursive perhaps?
 def special_loss(logits,target,mask,token_sections=[{"label":"null","n_channels":1}]):
     loss=0
 
-    masked_target = target*(1-mask)-masked_target
+    masked_target = target*(1-mask)-mask
 
     for batch in range(target.shape[0]):
         for pred_timestep in range(target.shape[1]):
             section_candidates=[[] for section in token_sections]
             for target_timestep in range(target.shape[1]):
                 # check that masked target is equal
-                masked_target_is_equal = masked_target[batch,pred_timestep]==masked_target[batch,target_timestep]
+                masked_target_is_equal = (masked_target[batch,pred_timestep]==masked_target[batch,target_timestep]).all()
                 if masked_target_is_equal:
                     channel_offset=0
                     section_candidates[0].append(target[batch,target_timestep,:token_sections[0]["n_channels"]])
@@ -45,7 +43,9 @@ def special_loss(logits,target,mask,token_sections=[{"label":"null","n_channels"
 
             channel_offset=0
             for i in range(len(token_sections)):
-                loss += torch.nn.cross_entropy(logits[batch,pred_timestep,channel_offset:token_sections[i]["n_channels"]+channel_offset], torch.mean(torch.stack(section_candidates[i],axis=-1),axis=-1))
+                if mask[batch,pred_timestep,channel_offset:token_sections[i]["n_channels"]+channel_offset].all():
+                    if len(section_candidates[i])>0:
+                        loss += torch.nn.functional.cross_entropy(logits[batch,pred_timestep,channel_offset:token_sections[i]["n_channels"]+channel_offset], torch.mean(torch.stack(section_candidates[i],axis=-1),axis=-1))
                 channel_offset += token_sections[i]["n_channels"]
                     
     return loss
@@ -61,8 +61,8 @@ class Model(pl.LightningModule):
         self.model = TransformerModel(n_channels=self.n_channels,n_layers=n_layers,n_hidden_size=n_hidden_size)
 
     def forward(self,x,mask):
-        y, y_prob = self.model(x,mask)
-        return y, y_prob
+        y = self.model(x,mask)
+        return y
     
     def compute_loss(self, logits, targets, mask):
         return special_loss(logits,targets,mask, self.token_sections)
@@ -77,22 +77,20 @@ class Model(pl.LightningModule):
 
         # compute mask ratio
         mask_ratio = self.schedule(torch.rand(batch_size,device=seq.device))
-        mask_ratio = einops.repeat(mask_ratio,'b -> b sequence sections',sections=n_sections,sequence=seq.shape[1])
+        mask_ratio = einops.repeat(mask_ratio,'b -> b sequence sections',sequence=seq.shape[1],sections=n_sections)
         # compute mask
         section_mask = (torch.rand(mask_ratio.shape,device=mask_ratio.device) < mask_ratio).float()
 
         channel_offset=0
         mask = []
         for i in range(n_sections):
-            mask.append( section_mask[:,:,i].repeat(1,1,self.token_sections[i]["n_channels"]))
+            mask.append(section_mask[:,:,i].unsqueeze(-1).repeat(1,1,self.token_sections[i]["n_channels"]))
         mask = torch.concat(mask,axis=-1)
 
         assert mask.shape == seq.shape 
-        print(mask.shape)
-        print(seq.shape)
-         
+        
         # compute loss
-        y, _ = self(seq,mask)
+        y = self(seq,mask)
         loss = self.compute_loss(y, seq,mask)
 
         # log loss
@@ -287,7 +285,8 @@ if __name__ == "__main__":
     np.random.seed(0)
 
 
-    ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data.pt", crop_size=36)
+    ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
+
     dl = torch.utils.data.DataLoader(ds, batch_size=100, shuffle=True, num_workers=20)
 
     wandb_logger = WandbLogger()

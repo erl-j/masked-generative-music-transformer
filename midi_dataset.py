@@ -289,6 +289,9 @@ class NoteSeqDataset(torch.utils.data.Dataset):
     def load_data(self, path):
         self.data = torch.load(path)
 
+    def save_data(self, path):
+        torch.save(self.data,path)
+
     def get_token_sections(self):
         n_pitches=36
         n_timesteps=64
@@ -323,7 +326,7 @@ class NoteSeqDataset(torch.utils.data.Dataset):
         for note in note_seq:
             note["pitch"] -= start_pitch
 
-        seq = noteseq_to_model_format(note_seq,36,64,128)
+        seq = noteseq_to_model_format(note_seq,36,64,128).astype(np.float32)
         
         return {"seq":seq}
         

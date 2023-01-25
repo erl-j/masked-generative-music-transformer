@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 
 class TransformerModel(torch.nn.Module):
-    def __init__(self,n_channels,n_layers,n_hidden_size):
+    def __init__(self, n_channels,n_layers,n_hidden_size):
         super().__init__()
 
         self.n_total_embedding_channels = n_hidden_size
@@ -37,16 +37,18 @@ class TransformerModel(torch.nn.Module):
 
         embed = self.embedding_layer(masked_x)
 
+        x = torch.cat([x,embed],dim=-1)
+
         x = self.transformer_encoder(x)
         y = self.output_layer(x)
 
         y_prob = torch.zeros_like(y)
 
         offset=0
-        for section in self.token_sections:
-            y_prob=F.softmax(y[:,:,section[offset:offset+section.n_channels]],dim=-1)
+        # for section in self.token_sections:
+        #     y_prob=F.softmax(y[:,:,section[offset:offset+section.n_channels]],dim=-1)
 
-        return y, y_prob
+        return y
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=2e-5)
