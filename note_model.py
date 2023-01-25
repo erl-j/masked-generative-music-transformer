@@ -13,7 +13,7 @@ class TransformerModel(torch.nn.Module):
 
         self.n_total_embedding_channels = n_hidden_size
         self.n_channels=n_channels
-        self.n_additional_embedding_channels = self.n_total_embedding_channels-self.n_channels-self.n_mask_channels-self.fixed_embeddings.shape[-1]
+        self.n_additional_embedding_channels = self.n_total_embedding_channels-self.n_channels
         self.n_heads = 1
         self.n_layers= n_layers
       

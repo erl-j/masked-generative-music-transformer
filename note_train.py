@@ -19,6 +19,9 @@ import glob
 
 
 
+# make generic so that it accepts a graph with dependencies between the various events/sections
+# also rewrite with better use of tensor operations.
+# recursive perhaps?
 def special_loss(logits,target,mask,token_sections=[{"label":"null","n_channels":1}]):
     loss=0
 
@@ -80,12 +83,13 @@ class Model(pl.LightningModule):
 
         channel_offset=0
         mask = []
-        for i in n_sections:
+        for i in range(n_sections):
             mask.append( section_mask[:,:,i].repeat(1,1,self.token_sections[i]["n_channels"]))
         mask = torch.concat(mask,axis=-1)
 
-
-        assert mask.shape == seq.shape
+        assert mask.shape == seq.shape 
+        print(mask.shape)
+        print(seq.shape)
          
         # compute loss
         y, _ = self(seq,mask)
@@ -288,7 +292,7 @@ if __name__ == "__main__":
 
     wandb_logger = WandbLogger()
     
-    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],gpus=[2],log_every_n_steps=1)
+    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],log_every_n_steps=1,accelerator="cpu")
     model = Model(token_sections=ds.get_token_sections(),n_layers=4,n_hidden_size=512)
 
 

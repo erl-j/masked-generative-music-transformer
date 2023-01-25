@@ -257,23 +257,23 @@ def noteseq_to_model_format(note_sequence, n_pitches,n_timesteps, sequence_lengt
     output=[]
     for step_index in range(sequence_length):
         step=[]
-
         if step_index < len(note_sequence):
             # type section
             step.append(onehot(0,2))
             # pitch section
-            step.append(onehot(step["pitch"],n_pitches))
+            step.append(onehot(note_sequence[step_index]["pitch"],n_pitches))
             # onset section
-            step.append(onehot(step["start"],n_timesteps))
+            step.append(onehot(note_sequence[step_index]["start"],n_timesteps))
             # duration section
-            duration = step["end"]-step["start"]
+            duration = note_sequence[step_index]["end"]-note_sequence[step_index]["start"]
             step.append(onehot(duration, n_timesteps))
         else:
             step.append(onehot(1,2))
-            step.append(onehot(0,n_pitches)*0)
-            step.append(onehot(0,n_timesteps)*0)
-            step.append(onehot(0, n_timesteps)*0)
-        output.append(np.concat(step))
+            # uniform distribution
+            step.append(np.ones(n_pitches)/n_pitches)
+            step.append(np.ones(n_timesteps)/n_timesteps)
+            step.append(np.ones(n_timesteps)/n_timesteps)
+        output.append(np.concatenate(step))
     output = np.stack(output)
     return output
 
@@ -290,7 +290,14 @@ class NoteSeqDataset(torch.utils.data.Dataset):
         self.data = torch.load(path)
 
     def get_token_sections(self):
-        return [{"label":"type","n_channels":2},{"label":"pitch","n_channels":n_pitches},{"label":"onset","time_channels":n_timesteps},{"label":"duration","n_channels":n_timesteps}]
+        n_pitches=36
+        n_timesteps=64
+        return [
+            {"label":"type","n_channels":2},
+            {"label":"pitch","n_channels":n_pitches},
+            {"label":"onset","n_channels":n_timesteps},
+            {"label":"duration","n_channels":n_timesteps}
+            ]
 
 
     def __getitem__(self, idx):
@@ -318,7 +325,7 @@ class NoteSeqDataset(torch.utils.data.Dataset):
 
         seq = noteseq_to_model_format(note_seq,36,64,128)
         
-        return {**example,"note_seq":note_seq,"seq":seq}
+        return {"seq":seq}
         
 
     def __len__(self):
