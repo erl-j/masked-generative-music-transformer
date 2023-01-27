@@ -290,13 +290,13 @@ if __name__ == "__main__":
     np.random.seed(0)
 
 
-    ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
+    ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data.pt", crop_size=36)
 
-    dl = torch.utils.data.DataLoader(ds, batch_size=100, shuffle=True, num_workers=20)
+    dl = torch.utils.data.DataLoader(ds, batch_size=512, shuffle=True, num_workers=20)
 
     wandb_logger = WandbLogger()
     
-    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],log_every_n_steps=1,accelerator="cpu")
+    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],log_every_n_steps=1,gpus=[0])
     model = Model(token_sections=ds.get_token_sections(),n_layers=4,n_hidden_size=512)
 
 
