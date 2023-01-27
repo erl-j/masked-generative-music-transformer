@@ -16,40 +16,36 @@ import wandb
 from torch.nn import functional as F
 from note_model import TransformerModel
 import glob
-
+import datetime
 # make generic so that it accepts a graph with dependencies between the various events/sections
 # also rewrite with better use of tensor operations.
 # recursive perhaps?
+
 def special_loss(logits,target,mask,token_sections=[{"label":"null","n_channels":1}]):
     loss=0
-
     masked_target = target*(1-mask)-mask
+    # matrix of shape (batch_size, pred_timesteps, target_timesteps) 
+    # where each element is 1 if the masked target is equal and 0 otherwise
+    masked_target_is_equal = (masked_target.unsqueeze(1)==masked_target.unsqueeze(2)).all(dim=-1)
+    target_sum = target[:,None,:, :]*masked_target_is_equal[...,None]
+    target_mean = torch.mean(target_sum,axis=1)
 
-    for batch in range(target.shape[0]):
-        for pred_timestep in range(target.shape[1]):
-            section_candidates=[[] for section in token_sections]
-            for target_timestep in range(target.shape[1]):
-                # check that masked target is equal
-                masked_target_is_equal = (masked_target[batch,pred_timestep]==masked_target[batch,target_timestep]).all()
-                if masked_target_is_equal:
-                    channel_offset=0
-                    section_candidates[0].append(target[batch,target_timestep,:token_sections[0]["n_channels"]])
-                    channel_offset += token_sections[0]["n_channels"]
-                    # if type is not null, add other sections
-                    if target[batch,target_timestep,0] != 0:
-                        for i in range(1, len(token_sections)):
-                            section_candidates[i].append(target[batch,target_timestep,channel_offset:token_sections[i]["n_channels"]+channel_offset])
-                            channel_offset += token_sections[i]["n_channels"]
+    channel_offset=0
 
-            channel_offset=0
-            for i in range(len(token_sections)):
-                if mask[batch,pred_timestep,channel_offset:token_sections[i]["n_channels"]+channel_offset].all():
-                    if len(section_candidates[i])>0:
-                        loss += torch.nn.functional.cross_entropy(logits[batch,pred_timestep,channel_offset:token_sections[i]["n_channels"]+channel_offset], torch.mean(torch.stack(section_candidates[i],axis=-1),axis=-1))
-                channel_offset += token_sections[i]["n_channels"]
-                    
+    logits = einops.rearrange(logits, "batch sequence channel -> (batch sequence) channel")
+    target_mean=einops.rearrange(target_mean, "batch sequence channel -> (batch sequence) channel")
+    mask = einops.rearrange(mask, "batch sequence channel -> (batch sequence) channel")
+
+    for i in range(len(token_sections)):
+        section_loss = torch.nn.functional.cross_entropy(
+            logits[...,channel_offset:token_sections[i]["n_channels"]+channel_offset],
+        target_mean[...,channel_offset:token_sections[i]["n_channels"]+channel_offset],
+       reduction="none")
+        section_loss = section_loss * (torch.sum(mask[...,channel_offset:channel_offset+token_sections[i]["n_channels"]],axis=-1)==token_sections[i]["n_channels"])
+        loss+=torch.mean(section_loss)
+        channel_offset += token_sections[i]["n_channels"]
     return loss
-                        
+      
 
 class Model(pl.LightningModule):
     def __init__(self, token_sections, n_layers=None,n_hidden_size=None):
@@ -68,6 +64,7 @@ class Model(pl.LightningModule):
         return special_loss(logits,targets,mask, self.token_sections)
 
     def training_step(self, batch, batch_idx):
+
         # get data
         seq = batch["seq"]
         # batch size
@@ -91,7 +88,15 @@ class Model(pl.LightningModule):
         
         # compute loss
         y = self(seq,mask)
+
+        # time iteration
+        timea = datetime.datetime.now()
+
         loss = self.compute_loss(y, seq,mask)
+
+        timeb = datetime.datetime.now()
+
+        # print(timeb-timea)
 
         # log loss
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
