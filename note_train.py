@@ -44,10 +44,10 @@ def special_loss(logits,target,mask):
         expanded_target = target[channel][:,None,...]*masked_target_is_equal[...,None]
         target_mean = torch.mean(expanded_target,dim=2)
         channel_loss = torch.nn.functional.cross_entropy(
-            logits[channel],
-            target_mean, 
+            logits[channel].reshape((batch_size*n_timesteps,-1)),
+            target_mean.reshape((batch_size*n_timesteps,-1)),
             reduction="none",
-        )
+        ).reshape((batch_size,n_timesteps))
         is_masked = mask[channel].sum(dim=-1)==mask[channel].shape[-1]
         loss+=torch.mean(channel_loss*is_masked[:,None])
     return loss
