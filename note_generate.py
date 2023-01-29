@@ -54,7 +54,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = Model(token_sections = ds.get_token_sections(), n_layers=4,n_hidden_size=512)
-ckpt_path =glob.glob("lightning_logs/1msm59m1/checkpoints/*.ckpt")[0]
+ckpt_path =glob.glob("lightning_logs/1jjhypif/checkpoints/*.ckpt")[0]
 
 model.load_state_dict(torch.load(ckpt_path,map_location=torch.device(device))['state_dict'])
 # %%
