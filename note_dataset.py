@@ -7,6 +7,18 @@ def onehot(idx,n_values):
     onehot[idx]=1
     return onehot
 
+def model_format_to_noteseq(x):
+    """
+    Converts a model input format to a note sequence.
+    """
+    note_sequence = []
+    n_timesteps, n_pitches = next(iter(x.values())).shape
+    for timestep_index in range(n_timesteps):
+        note_sequence.append({"pitch":np.argmax(x["pitch"][timestep_index]),
+                            "start":np.argmax(x["onset"][timestep_index]),
+                            "end":np.argmax(x["onset"][timestep_index])+np.argmax(x["duration"][timestep_index])})
+    return note_sequence
+                
 def noteseq_to_model_format(note_sequence, n_pitches,n_timesteps, sequence_length):
     """
     Converts a note sequence to a model input format.
@@ -16,7 +28,6 @@ def noteseq_to_model_format(note_sequence, n_pitches,n_timesteps, sequence_lengt
     note_onset=[]
     note_duration=[]
     for step_index in range(sequence_length):
-      
         if step_index < len(note_sequence):
             # type section
             note_type.append(onehot(0,2))
@@ -46,7 +57,6 @@ class NoteDataset(torch.utils.data.Dataset):
         self.load_data(prepared_data_path)
         # filter away noteseq of length 0
         self.data = [example for example in self.data if len(example["note_seq"]) > 0]
-        
 
     def load_data(self, path):
         self.data = torch.load(path)
@@ -63,7 +73,6 @@ class NoteDataset(torch.utils.data.Dataset):
             {"label":"onset","n_channels":n_timesteps},
             {"label":"duration","n_channels":n_timesteps}
             ]
-
 
     def __getitem__(self, idx):
         example = self.data[idx]

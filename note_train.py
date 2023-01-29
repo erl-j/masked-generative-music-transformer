@@ -74,13 +74,15 @@ def split_channels(seq, token_sections):
     return split_seq
 
 class Model(pl.LightningModule):
-    def __init__(self, token_sections, n_layers=None,n_hidden_size=None):
+    def __init__(self, token_sections, n_layers=None,n_hidden_size=None, masking_mode="channel"):
         super().__init__()
 
         self.token_sections = token_sections
         self.total_size = sum([section["n_channels"] for section in self.token_sections])
 
         self.model = TransformerModel(n_channels=self.total_size,n_layers=n_layers,n_hidden_size=n_hidden_size)
+
+        self.masking_mode = masking_mode
 
     def forward(self,x,mask):
         y = self.model(x,mask)
@@ -99,26 +101,31 @@ class Model(pl.LightningModule):
 
         n_sections = len(seq)
 
-        # compute mask ratio
         mask_ratio = self.schedule(torch.rand(batch_size,device=device))
-        mask_ratio = einops.repeat(mask_ratio,'b -> b sequence sections',sequence=sequence_length,sections=n_sections)
-        # compute mask
-        section_mask = (torch.rand(mask_ratio.shape,device=mask_ratio.device) < mask_ratio).float()
 
-        mask = OrderedDict()
-        for i, key, value in zip(range(n_sections),seq.keys(),seq.values()): 
-            mask[key]=section_mask[...,i].unsqueeze(-1).expand(value.shape)
-        
+        if self.masking_mode == "channel":
+            # compute mask ratio
+            mask_ratio = einops.repeat(mask_ratio,'b -> b sequence sections',sequence=sequence_length,sections=n_sections)
+            # compute mask
+            section_mask = (torch.rand(mask_ratio.shape,device=mask_ratio.device) < mask_ratio).float()
+
+            mask = OrderedDict()
+            for i, key, value in zip(range(n_sections),seq.keys(),seq.values()): 
+                mask[key]=section_mask[...,i].unsqueeze(-1).expand(value.shape)
+        elif self.masking_mode == "full":
+            mask_ratio = einops.repeat(mask_ratio,'b -> b sequence full',sequence=sequence_length,full=self.total_size)
+            section_mask = (torch.rand(mask_ratio.shape,device=mask_ratio.device) < mask_ratio).float()
+            mask = split_channels(section_mask,self.token_sections)
+
         merged_seq = merge_channels(seq,self.total_size)
         merged_mask = merge_channels(mask,self.total_size)
         # compute loss
         
-        y = self(merged_seq,merged_mask)
+        merged_logits = self(merged_seq,merged_mask)
         # time iteration
         timea = datetime.datetime.now()
 
-        logits = split_channels(y,self.token_sections)
-
+        logits = split_channels(merged_logits,self.token_sections)
 
         loss = self.compute_loss(logits,seq,mask)
         timeb = datetime.datetime.now()
@@ -138,7 +145,60 @@ class Model(pl.LightningModule):
             mask_ratio = torch.tensor(mask_ratio,device=self.device)
         return torch.acos(mask_ratio)/(np.pi/2.0)
 
+    def generate_with_channel_mode(self,x,section_mask,temperature,plot):
+        if x is None:
+            x = torch.zeros((1,self.n_timesteps,self.total_size),device=self.device)
+            x = split_channels(x,self.token_sections)
+        if section_mask is None:
+            section_mask = torch.ones((1,self.n_timesteps,len(self.x)),device=self.device)
 
+        batch_size ,n_timesteps, _= next(iter(x.items()))[1].shape
+
+        n_masked =  torch.sum(section_mask)
+
+        with torch.no_grad():
+            for step in range(n_masked,n_timesteps*len(x)):
+                
+                mask = OrderedDict()
+                for i, key, value in zip(range(len(x)),x.keys(),x.values()): 
+                    mask[key]=section_mask[...,i].unsqueeze(-1).expand(value.shape)
+                merged_mask = merge_channels(mask,self.total_size)
+                merged_x = merge_channels(x,self.total_size)
+
+                merged_logits = self(merged_x,merged_mask)
+
+                logits= split_channels(merged_logits,self.token_sections)
+
+                y_probs = OrderedDict()
+                for key, value in logits.items():
+                    y_probs[key] = torch.softmax(value/temperature,dim=-1)
+
+                # get list of indices of section mask == 1
+                masked_indices = section_mask.nonzero()
+                
+                index_to_unmask = masked_indices[torch.randint(0,len(masked_indices),(1,))]
+
+                # get key 
+                key = list(x.keys())[index_to_unmask[0]]
+                timestep = index_to_unmask[1]
+
+                # sample from distribution
+                probs = y_probs[key][0,timestep]
+
+                sampled_index = torch.distributions.Categorical(probs=probs).sample() 
+                one_hot = torch.zeros_like(probs)
+                one_hot[sampled_index] = 1
+
+                x[key][0,timestep] = one_hot
+                section_mask[index_to_unmask[0],index_to_unmask[1],index_to_unmask[2]] = 0
+
+        return x
+
+    def generate(self,x=None, section_mask=None, temperature=1.0,  plot=False,mode=None):
+        if mode=="channel":
+            return self.generate_with_channel_mode(self,x,section_mask,temperature,plot)
+
+        
 
     # def generate(self,x=None, section_mask=None, n_sampling_steps=None, temperature=1.0, activity_bias=0, plot=False):
 

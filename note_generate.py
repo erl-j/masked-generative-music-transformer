@@ -8,57 +8,45 @@ import torch
 from IPython.display import Audio, display
 
 from chiptune import chiptunes_synthesize
-from midi_dataset import MidiDataset, NoteSeqDataset
+from note_dataset import (NoteDataset, model_format_to_noteseq,
+                          noteseq_to_model_format)
 from piano_roll_to_pretty_midi import to_pretty_midi
 from train import Model
-from util import crop_roll_128_to_88, pad_roll_88_to_128, noteseq_to_roll
+from util import crop_roll_128_to_88, noteseq_to_roll, pad_roll_88_to_128
+
 
 def play_audio(audio):
     display(Audio(audio, rate=44100))
 
 def play_roll(roll):
-
     # pad to 88 with zeros
     roll = torch.nn.functional.pad(roll,(0,0,30,22))
     full_roll = pad_roll_88_to_128(roll)
-
     # repeat full roll twice
     full_roll = torch.cat([full_roll,full_roll],dim=-1)
-
     full_roll=full_roll.numpy()
-
     full_roll=full_roll.T
-
     midi = to_pretty_midi(full_roll, constant_tempo=100)
-
     audio = chiptunes_synthesize(midi)
-
     play_audio(audio)
 
 #%%
-ds = NoteSeqDataset(prepared_data_path="data/prepared_gamer_noteseq_data.pt", crop_size=36)
+ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
 
-import matplotlib.pyplot as plt
-
-
-#%%
-plt.hist([len(d["note_seq"]) for d in ds],bins=100)
-
-
-#%%
-#%%
-
-# compute average note sequence length
-note_seq_lengths = [len(d["note_seq"]) for d in ds]
-
+example = ds[0]["seq"]
 
 #%%
 
+ns = model_format_to_noteseq(example)
 
+ns = [{**n,"velocity":127} for n in ns]
+
+roll = noteseq_to_roll(ns,36,64)
+
+plt.imshow(roll)
+plt.show()
 
 #%%
-
-
 #%%
 # Hide the GPU
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -67,39 +55,28 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = Model(n_pitches=36,n_timesteps=32, architecture = "transformer", n_layers=5,n_hidden_size=256)
 ckpt_path =glob.glob("lightning_logs/2rv228sb/checkpoints/*.ckpt")[0]
 
-
-
-#ckpt_path = "artefacts/epoch=14-step=187080.ckpt"
-#ckpt_path =glob.glob("lightning_logs/2c1uhoqg/checkpoints/*.ckpt")[0]
-# n_layers = 5, n_hidden_size = 256
-
 #%%
 # test
 model.eval()
 for i in range(3):
     x= torch.zeros((1,36,32,2))
     x[0,0,0,0] = 1 
-
     mask = torch.ones((1,36,32,1))
     mask[0,0,0,0] = 0
-
     y,y_probs = model.forward(x,mask)
     print(y_probs[0,0,1])
 
 #%%
-
-
 # Load the model
 model.load_state_dict(torch.load(ckpt_path,map_location=torch.device(device))['state_dict'])
 # %%
 
+
 #%%
 idx = np.random.randint(0,len(ds))
 roll = torch.tensor(ds[idx]["piano_roll"])
-
 roll =roll
 mask = torch.zeros_like(roll)
-
 plt.imshow(roll)
 plt.show()
 
