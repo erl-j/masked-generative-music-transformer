@@ -31,7 +31,6 @@ class TransformerModel(torch.nn.Module):
        
     def forward(self,x,mask):
         batch_size = x.shape[0]
-
         # set masked to -1
         masked_x = (1-mask)*x + mask*-1
 
@@ -41,7 +40,6 @@ class TransformerModel(torch.nn.Module):
 
         x = self.transformer_encoder(x)
         y = self.output_layer(x)
-
 
         return y
 

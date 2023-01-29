@@ -205,7 +205,7 @@ class Model(pl.LightningModule):
                 one_hot = torch.zeros_like(probs)
                 one_hot[:,sampled_index] = 1
 
-                x[key][0,timestep] = one_hot
+                x[key][:,timestep] = one_hot
                 section_mask[:,index_to_unmask[0],index_to_unmask[1]] = 0
 
                 # plt.imshow(section_mask[0].cpu().numpy(),aspect="auto")

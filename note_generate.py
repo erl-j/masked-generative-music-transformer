@@ -1,7 +1,6 @@
 #%%
 import glob
 import os
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -33,9 +32,15 @@ def play_roll(roll):
 #%%
 ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
 
-example = ds[np.random.randint(len(ds))]["seq"]
+dl = torch.utils.data.DataLoader(ds, batch_size=1, shuffle=False)
 
-ns = model_format_to_noteseq(example)
+batch = next(iter(dl))["seq"]
+
+sample = {k:v[0] for k,v in batch.items()}
+
+ns = model_format_to_noteseq(sample)
+
+
 ns = [{**n,"velocity":127} for n in ns]
 roll = noteseq_to_roll(ns,36,64)
 
@@ -49,14 +54,29 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = Model(token_sections = ds.get_token_sections(), n_layers=4,n_hidden_size=512)
-ckpt_path =glob.glob("lightning_logs/1qjrgwcq/checkpoints/*.ckpt")[0]
+ckpt_path =glob.glob("lightning_logs/3q3zihz4/checkpoints/*.ckpt")[0]
 
 model.load_state_dict(torch.load(ckpt_path,map_location=torch.device(device))['state_dict'])
 # %%
-x = model.generate(x=None,section_mask=None,temperature=0.5, mode="channel")
+
+x = batch
+n_timesteps = x["type"].shape[1]
+n_sections = len(x)
+
+x["type"]=torch.zeros_like(torch.tensor(x["type"]))
+x["type"][:,:,0]=0
+x["type"][:,:,1]=1
+x["type"][:,:10,0]=1
+x["type"][:,:10,1]=0
+
+section_mask = torch.ones((1,n_timesteps,n_sections))
+section_mask[:,:,0]=0
+
+x = model.generate(x=x,section_mask=section_mask,temperature=1.0, mode="channel")
+
+print(x["type"])
 
 x0 = {key: tensor[0] for key, tensor in x.items()}
-
 ns = model_format_to_noteseq(x0)
 ns = [{**n,"velocity":127} for n in ns]
 roll = noteseq_to_roll(ns,36,64)
