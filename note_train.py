@@ -38,21 +38,28 @@ def special_loss(logits,target,mask):
     batch_size ,n_timesteps, _ = merged_logits.shape
     for channel in logits.keys():
         if channel == "type":
-            loss_mask = masked_target_is_equal*is_note[:,None,:]
-        else:
             loss_mask = masked_target_is_equal
+        else:
+            loss_mask = masked_target_is_equal*is_note[:,None,:]
 
-        expanded_target = target[channel][:,None,...]*loss_mask
-        
-        target_mean = expanded_target.sum(dim=-2)/loss_mask.sum(dim=-2)            
+        expanded_target = target[channel].unsqueeze(1).repeat(1,n_timesteps,1,1) * loss_mask[...,None]
+   
+        target_mean = expanded_target.sum(dim=-2)/(loss_mask[...,None].sum(dim=-2))
+
+        zero_sum_mask = loss_mask.sum(dim=-1)==0
+
+        # replace nan with 0
+        target_mean[zero_sum_mask] = 0
 
         channel_loss = torch.nn.functional.cross_entropy(
             logits[channel].reshape((batch_size*n_timesteps,-1)),
             target_mean.reshape((batch_size*n_timesteps,-1)),
             reduction="none",
         ).reshape((batch_size,n_timesteps))
+
         is_masked = mask[channel].sum(dim=-1)==mask[channel].shape[-1]
-        loss+=torch.mean(channel_loss*is_masked[:,None])
+
+        loss+=torch.mean(channel_loss*is_masked[:,None]* (1-zero_sum_mask.float()))
     return loss
 
 def merge_channels(seq, total_size=None):
