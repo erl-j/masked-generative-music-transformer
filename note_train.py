@@ -20,13 +20,7 @@ import datetime
 from collections import OrderedDict
 
 # make generic so that it accepts a graph with dependencies between the various events/sections
-# also rewrite with better use of tensor operations.
 # recursive perhaps?
-
-# split sections : splits a b s t sequence into a sequence of sections
-
-# merge sections
-
 
 def special_loss(logits,target,mask):
     merged_target = merge_channels(target)
@@ -147,18 +141,27 @@ class Model(pl.LightningModule):
 
     def generate_with_channel_mode(self,x,section_mask,temperature,plot):
         if x is None:
-            x = torch.zeros((1,self.n_timesteps,self.total_size),device=self.device)
+            n_timesteps = 128
+        else:
+            n_timesteps = next(iter(x.items()))[1].shape[1]
+        if x is None:
+            x = torch.zeros((1,n_timesteps,self.total_size),device=self.device)
             x = split_channels(x,self.token_sections)
         if section_mask is None:
-            section_mask = torch.ones((1,self.n_timesteps,len(self.x)),device=self.device)
+            section_mask = torch.ones((1,n_timesteps,len(x)),device=self.device)
 
-        batch_size ,n_timesteps, _= next(iter(x.items()))[1].shape
+        batch_size,n_timesteps, _= next(iter(x.items()))[1].shape
 
-        n_masked =  torch.sum(section_mask)
+        n_masked =  int(torch.sum(section_mask).item())
+
+        print(n_masked)
+
+        n_cells = n_timesteps*len(x)
 
         with torch.no_grad():
-            for step in range(n_masked,n_timesteps*len(x)):
+            for step in range(n_cells-n_masked,n_cells):
                 
+                print(f"step {step}/{n_cells}")
                 mask = OrderedDict()
                 for i, key, value in zip(range(len(x)),x.keys(),x.values()): 
                     mask[key]=section_mask[...,i].unsqueeze(-1).expand(value.shape)
@@ -174,197 +177,34 @@ class Model(pl.LightningModule):
                     y_probs[key] = torch.softmax(value/temperature,dim=-1)
 
                 # get list of indices of section mask == 1
-                masked_indices = section_mask.nonzero()
-                
-                index_to_unmask = masked_indices[torch.randint(0,len(masked_indices),(1,))]
+                masked_indices = section_mask[0].nonzero()
 
-                # get key 
-                key = list(x.keys())[index_to_unmask[0]]
-                timestep = index_to_unmask[1]
+                index_to_unmask = masked_indices[np.random.randint(len(masked_indices))]
+
+                print("index to unmask",index_to_unmask)
+
+                timestep = index_to_unmask[0]
+                key = list(x.keys())[index_to_unmask[1]]
 
                 # sample from distribution
-                probs = y_probs[key][0,timestep]
+                probs = y_probs[key][:,timestep]
 
-                sampled_index = torch.distributions.Categorical(probs=probs).sample() 
+                print("probs",probs.shape)
+                sampled_index = torch.distributions.Categorical(probs=probs).sample([batch_size])
                 one_hot = torch.zeros_like(probs)
-                one_hot[sampled_index] = 1
+                one_hot[:,sampled_index] = 1
 
                 x[key][0,timestep] = one_hot
-                section_mask[index_to_unmask[0],index_to_unmask[1],index_to_unmask[2]] = 0
+                section_mask[:,index_to_unmask[0],index_to_unmask[1]] = 0
 
+                # plt.imshow(section_mask[0].cpu().numpy(),aspect="auto")
+                # plt.show()
         return x
 
-    def generate(self,x=None, section_mask=None, temperature=1.0,  plot=False,mode=None):
+    def generate(self,x=None, section_mask=None, temperature=1.0, mode=None,plot=False):
         if mode=="channel":
-            return self.generate_with_channel_mode(self,x,section_mask,temperature,plot)
-
-        
-
-    # def generate(self,x=None, section_mask=None, n_sampling_steps=None, temperature=1.0, activity_bias=0, plot=False):
-
-    #     total_n_channels = sum([section["n_channels"] for section in self.token_sections])
-
-    #     if x is None:
-    #         x = torch.zeros((1,self.n_timesteps,total_n_channels),device=self.device)
-    #     if section_mask is None:
-    #         section_mask = torch.ones((1,self.n_timesteps,total_n_channels),device=self.device)
-
-    #     mask_ratio = torch.mean(section_mask,dim=[1,2])
-    #     step = int(self.inverse_schedule(mask_ratio)*n_sampling_steps)
-
-    #     batch_size ,n_timesteps, n_channels = x.shape
-
-    #     with torch.no_grad():
-
-    #         for step in range(step,n_sampling_steps):
-
-    #             mask = torch.cat([section_mask[:,:,i].unsqueeze(-1).repeat(1,1,self.token_sections[i]["n_channels"]) for i in range(len(self.token_sections))],axis=-1)
-
-    #             y,_ = self(x,mask)
-
-    #             y = einops.rearrange(y,'b t c -> b t c')
-
-    #             y[:,:,0] += activity_bias
-
-    #             probs = torch.softmax(y/temperature,dim=-1)
-
-    #             # n tokens to mask
-    #             n_mask = int(np.floor(self.schedule((step+1)/n_sampling_steps).cpu()*n_timesteps*self.n_sections))
-
-    #             # sample from probs
-    #             sampled_indices = torch.distributions.Categorical(probs=probs).sample()
-
-    #             # turn indices into one-hot
-    #             sample = torch.zeros_like(probs)
-    #             sample.scatter_(-1,sampled_indices[...,None],1)
-
-    #             assert torch.all(torch.sum(sample,dim=-1) == 1)
-
-    #             # confidence of indices (unmasked indices have confidence 1)
-    #             confidences = torch.sum(sample * probs,axis=-1)
-
-    #             flat_mask = einops.rearrange(mask,'b p t c -> b (p t) c')
-
-    #             confidences = confidences * flat_mask[...,0] + (1-flat_mask[...,0])
-                
-    #             # get confidence of n_mask:th lowest confidence
-    #             confidence_threshold = torch.sort(confidences,dim=-1)[0][:,n_mask]
-
-    #             flat_x = einops.rearrange(x,'b p t c -> b (p t) c')
-
-    #             if plot == True:
-
-    #                 os.makedirs("artefacts/gif",exist_ok=True)
-    #                 # globally set colormap to viridis
-    #                 plt.rcParams['image.cmap'] = 'inferno'
-
-    #                 # hide axes
-
-    #                 # global title for all subplots
-    #                 plt.suptitle(f"step {step}")
-                    
-    #                 fig,ax = plt.subplots(1,5,figsize=(15,5))
-    #                 ax[0].imshow(flat_x[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #                 ax[0].set_title("piano roll")
-
-    #                 ax[1].imshow(flat_mask[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #                 ax[1].set_title("mask")
-
-    #                 ax[2].imshow(probs[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #                 ax[2].set_title(f"probability of note")
-
-    #                 ax[3].imshow(sample[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #                 ax[3].set_title(f"sampled outcome")
-
-    #                 ax[4].imshow(confidences[0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #                 ax[4].set_title(f"confidence of sample")
-
-    #                 # hide axes
-    #                 for a in ax:
-    #                     a.axis('off')
-
-    #                 # global title for entire figure
-    #                 fig.suptitle(f"step {step+1}")
-
-    #                 plt.savefig(f"artefacts/gif/plot_{step}.png")
-    #                 plt.show()
-
-
-    #             # get sample 
-    #             sample = flat_mask * sample + (1-flat_mask) * flat_x
-
-    #             if use_confidence_sampling:
-    #                 new_mask = (confidences <  confidence_threshold[...,None])[...,None].float()
-    #             else:
-    #                 new_mask = flat_mask
-
-    #                 # get number of masked tokens
-    #                 n_current_mask = int(torch.sum(new_mask))
-
-    #                 # get indices that are currently masked
-    #                 masked_indices = torch.where(flat_mask[...,0] == 1)[1]
-
-    #                 n_to_unmask = n_current_mask-n_mask
-
-    #                 # get n_mask random indices
-    #                 random_indices = torch.randperm(masked_indices.shape[0])[:n_to_unmask]
-
-    #                 # get indices to unmask
-    #                 unmask_indices = masked_indices[random_indices]
-
-    #                 # unmask
-    #                 new_mask[:,unmask_indices,:] = 0
-
-
-                    
-    #             flat_x = flat_x*new_mask + (1-new_mask) * sample
-
-    #             assert torch.all(torch.sum(x,axis=-1) == 1)
-                
-    #             flat_mask = new_mask
-    #             mask = einops.rearrange(flat_mask,'b (p t) c -> b p t c',p=self.n_pitches,t=self.n_timesteps)
-    #             x = einops.rearrange(flat_x,'b (p t) c -> b p t c',p=self.n_pitches,t=self.n_timesteps)
-
-    #     if plot == True:
-
-    #         # globally set colormap to viridis
-        
+            return self.generate_with_channel_mode(x,section_mask,temperature,plot)
             
-    #         fig,ax = plt.subplots(1,5,figsize=(15,5))
-    #         ax[0].imshow(flat_x[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #         ax[0].set_title("piano roll")
-
-    #         ax[1].imshow(flat_mask[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #         ax[1].set_title("mask")
-
-    #         ax[2].imshow(probs[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #         ax[2].set_title(f"probability of note")
-
-    #         ax[3].imshow(sample[0,:,0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #         ax[3].set_title(f"sampled outcome")
-
-    #         ax[4].imshow(confidences[0].cpu().reshape(self.n_pitches,self.n_timesteps),vmin=0,vmax=1)
-    #         ax[4].set_title(f"confidence of sample")
-
-    #         # global title for entire figure
-    #         fig.suptitle(f"step {step+1}")
-
-    #         # hide axes
-    #         for a in ax:
-    #             a.axis('off')
-
-    #         plt.savefig(f"artefacts/gif/plot_{step+1}.png")
-    #         plt.show()
-
-
-
-    #     assert torch.all(mask) == 0
-
-    #     assert torch.all(torch.sum(x,axis=-1) == 1)
-    #     return model_format_to_piano_roll(x)
-
-
-    
     def configure_optimizers(self):
         return self.model.configure_optimizers()
 
