@@ -23,13 +23,14 @@ def model_format_to_noteseq(x):
 def noteseq_to_model_format(note_sequence, n_pitches,n_timesteps, sequence_length):
     """
     Converts a note sequence to a model input format.
+    ATTENTION: Only takes every other note!!
     """
     note_type=[]
     note_pitch=[]
     note_onset=[]
     note_duration=[]
     for step_index in range(sequence_length):
-        if step_index < len(note_sequence):
+        if step_index < len(note_sequence) and note_sequence[step_index]["start"]%2==0:
             # type section
             note_type.append(onehot(0,2))
             # pitch section
