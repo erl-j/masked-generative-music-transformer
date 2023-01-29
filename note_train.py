@@ -33,10 +33,19 @@ def special_loss(logits,target,mask):
     # matrix of shape (batch_size, pred_timesteps, target_timesteps) 
     # where each element is 1 if the masked target is equal and 0 otherwise
     masked_target_is_equal = (merged_masked_target.unsqueeze(1)==merged_masked_target.unsqueeze(2)).all(dim=-1)
+    is_note = target["type"][:,:,0]==1
+
     batch_size ,n_timesteps, _ = merged_logits.shape
     for channel in logits.keys():
-        expanded_target = target[channel][:,None,...]*masked_target_is_equal[...,None]
-        target_mean = torch.mean(expanded_target,dim=2)
+        if channel == "type":
+            loss_mask = masked_target_is_equal*is_note[:,None,:]
+        else:
+            loss_mask = masked_target_is_equal
+
+        expanded_target = target[channel][:,None,...]*loss_mask
+        
+        target_mean = expanded_target.sum(dim=-2)/loss_mask.sum(dim=-2)            
+
         channel_loss = torch.nn.functional.cross_entropy(
             logits[channel].reshape((batch_size*n_timesteps,-1)),
             target_mean.reshape((batch_size*n_timesteps,-1)),
@@ -220,7 +229,7 @@ if __name__ == "__main__":
 
     wandb_logger = WandbLogger()
     
-    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],log_every_n_steps=1,gpus=[1])
+    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],log_every_n_steps=1,gpus=[1],max_epochs=-1)
     model = Model(token_sections=ds.get_token_sections(),n_layers=4,n_hidden_size=512)
 
 
