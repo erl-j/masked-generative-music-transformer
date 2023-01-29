@@ -53,7 +53,7 @@ ckpt_path =glob.glob("lightning_logs/1qjrgwcq/checkpoints/*.ckpt")[0]
 
 model.load_state_dict(torch.load(ckpt_path,map_location=torch.device(device))['state_dict'])
 # %%
-x = model.generate(x=None,section_mask=None,temperature=0.01, mode="channel")
+x = model.generate(x=None,section_mask=None,temperature=0.5, mode="channel")
 
 x0 = {key: tensor[0] for key, tensor in x.items()}
 
@@ -64,8 +64,8 @@ roll = noteseq_to_roll(ns,36,64)
 plt.imshow(roll)
 plt.show()
 
+print(len(ns))
 
 play_roll(torch.tensor(roll))
-
 
 # %%

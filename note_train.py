@@ -154,14 +154,11 @@ class Model(pl.LightningModule):
 
         n_masked =  int(torch.sum(section_mask).item())
 
-        print(n_masked)
-
         n_cells = n_timesteps*len(x)
 
         with torch.no_grad():
             for step in range(n_cells-n_masked,n_cells):
                 
-                print(f"step {step}/{n_cells}")
                 mask = OrderedDict()
                 for i, key, value in zip(range(len(x)),x.keys(),x.values()): 
                     mask[key]=section_mask[...,i].unsqueeze(-1).expand(value.shape)
@@ -179,9 +176,8 @@ class Model(pl.LightningModule):
                 # get list of indices of section mask == 1
                 masked_indices = section_mask[0].nonzero()
 
-                index_to_unmask = masked_indices[np.random.randint(len(masked_indices))]
-
-                print("index to unmask",index_to_unmask)
+                #index_to_unmask = masked_indices[np.random.randint(len(masked_indices))]
+                index_to_unmask = masked_indices[0]
 
                 timestep = index_to_unmask[0]
                 key = list(x.keys())[index_to_unmask[1]]
@@ -189,7 +185,6 @@ class Model(pl.LightningModule):
                 # sample from distribution
                 probs = y_probs[key][:,timestep]
 
-                print("probs",probs.shape)
                 sampled_index = torch.distributions.Categorical(probs=probs).sample([batch_size])
                 one_hot = torch.zeros_like(probs)
                 one_hot[:,sampled_index] = 1

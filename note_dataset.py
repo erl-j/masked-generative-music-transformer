@@ -14,9 +14,10 @@ def model_format_to_noteseq(x):
     note_sequence = []
     n_timesteps, n_pitches = next(iter(x.values())).shape
     for timestep_index in range(n_timesteps):
-        note_sequence.append({"pitch":np.argmax(x["pitch"][timestep_index]),
-                            "start":np.argmax(x["onset"][timestep_index]),
-                            "end":np.argmax(x["onset"][timestep_index])+np.argmax(x["duration"][timestep_index])})
+        if np.argmax(x["type"][timestep_index])==0:
+            note_sequence.append({"pitch":np.argmax(x["pitch"][timestep_index]),
+                                "start":np.argmax(x["onset"][timestep_index]),
+                                "end":np.argmax(x["onset"][timestep_index])+np.argmax(x["duration"][timestep_index])})
     return note_sequence
                 
 def noteseq_to_model_format(note_sequence, n_pitches,n_timesteps, sequence_length):
@@ -65,14 +66,12 @@ class NoteDataset(torch.utils.data.Dataset):
         torch.save(self.data,path)
 
     def get_token_sections(self):
-        n_pitches=36
-        n_timesteps=64
-        return [
-            {"label":"type","n_channels":2},
-            {"label":"pitch","n_channels":n_pitches},
-            {"label":"onset","n_channels":n_timesteps},
-            {"label":"duration","n_channels":n_timesteps}
-            ]
+        example_seq = self[0]["seq"]
+        token_sections = []
+        for key in example_seq.keys():
+            token_sections.append({"label":key,"n_channels":example_seq[key].shape[-1]})
+        assert token_sections[0]["label"] == "type"
+        return token_sections
 
     def __getitem__(self, idx):
         example = self.data[idx]
