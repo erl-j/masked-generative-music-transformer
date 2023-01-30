@@ -155,7 +155,7 @@ class Model(pl.LightningModule):
             mask_ratio = torch.tensor(mask_ratio,device=self.device)
         return torch.acos(mask_ratio)/(np.pi/2.0)
 
-    def generate_with_channel_mode(self,x,section_mask,temperature,plot):
+    def generate_with_channel_mode(self,x,section_mask,temperature,n_sampling_steps,plot):
         if x is None:
             n_timesteps = 128
         else:
@@ -166,15 +166,27 @@ class Model(pl.LightningModule):
         if section_mask is None:
             section_mask = torch.ones((1,n_timesteps,len(x)),device=self.device)
 
+        n_cells=n_timesteps*len(x)
+
+        if n_sampling_steps==-1:
+            step=0
+            n_sampling_steps= n_cells
+        else:
+            mask_ratio = torch.mean(section_mask,dim=[1,2])
+            step = int(self.inverse_schedule(mask_ratio)*n_sampling_steps)
+        
         batch_size,n_timesteps, _= next(iter(x.items()))[1].shape
 
-        n_masked =  int(torch.sum(section_mask).item())
-
-        n_cells = n_timesteps*len(x)
-
         with torch.no_grad():
-            for step in range(n_cells-n_masked,n_cells):
-                
+            for step in tqdm(range(step,n_sampling_steps)):
+
+                n_masked = int(torch.sum(section_mask).item())
+                n_masked_next = int(np.ceil(self.schedule((step+1)/n_sampling_steps).cpu()*n_cells))
+
+                # print n_masked_next, n_masked
+                # print(f"step {step}/{n_sampling_steps} - {n_masked_next-n_masked} cells to mask")
+                # print(f"n_masked_next {n_masked_next} - n_masked {n_masked}")
+
                 mask = OrderedDict()
                 for i, key, value in zip(range(len(x)),x.keys(),x.values()): 
                     mask[key]=section_mask[...,i].unsqueeze(-1).expand(value.shape)
@@ -188,33 +200,33 @@ class Model(pl.LightningModule):
                 y_probs = OrderedDict()
                 for key, value in logits.items():
                     y_probs[key] = torch.softmax(value/temperature,dim=-1)
-
+                
                 # get list of indices of section mask == 1
                 masked_indices = section_mask[0].nonzero()
 
+
                 #index_to_unmask = masked_indices[np.random.randint(len(masked_indices))]
-                index_to_unmask = masked_indices[0]
+                indices_to_unmask = masked_indices[np.random.choice(len(masked_indices),n_masked-n_masked_next,replace=False)]
 
-                timestep = index_to_unmask[0]
-                key = list(x.keys())[index_to_unmask[1]]
+                for index_to_unmask in indices_to_unmask:
+                    timestep = index_to_unmask[0]
+                    key = list(x.keys())[index_to_unmask[1]]
 
-                # sample from distribution
-                probs = y_probs[key][:,timestep]
+                    # sample from distribution
+                    probs = y_probs[key][:,timestep]
 
-                sampled_index = torch.distributions.Categorical(probs=probs).sample([batch_size])
-                one_hot = torch.zeros_like(probs)
-                one_hot[:,sampled_index] = 1
+                    sampled_index = torch.distributions.Categorical(probs=probs).sample([batch_size])
+                    one_hot = torch.zeros_like(probs)
+                    one_hot[:,sampled_index] = 1
 
-                x[key][:,timestep] = one_hot
-                section_mask[:,index_to_unmask[0],index_to_unmask[1]] = 0
+                    x[key][:,timestep] = one_hot
+                    section_mask[:,index_to_unmask[0],index_to_unmask[1]] = 0
 
-                # plt.imshow(section_mask[0].cpu().numpy(),aspect="auto")
-                # plt.show()
         return x
 
-    def generate(self,x=None, section_mask=None, temperature=1.0, mode=None,plot=False):
+    def generate(self,x=None, section_mask=None, temperature=1.0, n_sampling_steps=None,mode=None,plot=False):
         if mode=="channel":
-            return self.generate_with_channel_mode(x,section_mask,temperature,plot)
+            return self.generate_with_channel_mode(x,section_mask,temperature,n_sampling_steps,plot)
             
     def configure_optimizers(self):
         return self.model.configure_optimizers()
