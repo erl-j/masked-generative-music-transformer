@@ -26,27 +26,25 @@ def special_loss(logits,target,mask,debug=False):
     merged_target = merge_channels(target)
     merged_mask = merge_channels(mask)
     merged_logits = merge_channels(logits)
-
     loss=0
-    merged_masked_target = merged_target*(1-merged_mask)-merged_mask
-
+    merged_masked_target = merged_target*(1-merged_mask)+(merged_mask*-1)
     # matrix of shape (batch_size, pred_timesteps, target_timesteps) 
     # where each element is 1 if the masked target is equal and 0 otherwise
     masked_target_is_equal = (merged_masked_target.unsqueeze(1)==merged_masked_target.unsqueeze(2)).all(dim=-1)
     is_note = target["type"][:,:,0]==1
-
     batch_size,n_timesteps, _ = merged_logits.shape
-
+    
     if debug:
-        # plt.imshow(merged_logits[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
-        # plt.show()
-
-        # print("merged_masked_target", merged_masked_target[0])
-        # plt.imshow(merged_masked_target[0].detach().cpu().numpy(), cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
-        # plt.show()
-
         for i in range(n_timesteps):
+            plt.title("merged_target")
+            plt.imshow(merged_target[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
+            plt.show()
+        
+            plt.title("merged_mask")
+            plt.imshow(merged_mask[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
+            plt.show()
 
+            plt.title("merged_masked_target")
             plt.imshow(merged_masked_target[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
             # show grid every integer
             plt.xticks(np.arange(0,n_timesteps+1,1.0))
@@ -69,10 +67,8 @@ def special_loss(logits,target,mask,debug=False):
                 left=False,         # ticks along the left edge are off
                 labelbottom=False, # labels along the bottom edge are off
                 labelleft=False)
-
-
+                
             plt.show()
-
 
     for channel in logits.keys():
         if channel == "type":
@@ -80,24 +76,21 @@ def special_loss(logits,target,mask,debug=False):
         else:
             loss_mask = masked_target_is_equal*is_note[:,None,:]
 
-        expanded_target = target[channel].unsqueeze(1).repeat(1,n_timesteps,1,1) * loss_mask[...,None]
-   
-        target_mean = expanded_target.sum(dim=-2)/(loss_mask[...,None].sum(dim=-2))
-
-        zero_sum_mask = loss_mask.sum(dim=-1)==0
-
-        # replace nan with 0
-        target_mean[zero_sum_mask] = 0
+        # expand the target and logits to have shape (batch_size, pred_timesteps, target_timesteps, n_channels)
+        
+        # calculate cross entropy for every logit target pair
+        expanded_logits = logits[channel].unsqueeze(2).expand((batch_size,n_timesteps,n_timesteps,-1))
+        expanded_target = target[channel].unsqueeze(1).expand((batch_size,n_timesteps,n_timesteps,-1))
 
         channel_loss = torch.nn.functional.cross_entropy(
-            logits[channel].reshape((batch_size*n_timesteps,-1)),
-            target_mean.reshape((batch_size*n_timesteps,-1)),
+            expanded_logits.reshape((batch_size*n_timesteps*n_timesteps,-1)),
+            expanded_target.reshape((batch_size*n_timesteps*n_timesteps,-1)),
             reduction="none",
-        ).reshape((batch_size,n_timesteps))
+        ).reshape((batch_size,n_timesteps,n_timesteps))
 
         is_masked = mask[channel].sum(dim=-1)==mask[channel].shape[-1]
 
-        loss+=torch.mean(channel_loss*is_masked[:,None]* (1-zero_sum_mask.float()))
+        loss+=torch.mean(channel_loss*loss_mask.float()*is_masked[:,:,None].float())
     return loss
 
 def merge_channels(seq, total_size=None):
@@ -211,6 +204,7 @@ class Model(pl.LightningModule):
             step=0
             n_sampling_steps= n_cells
         else:
+            is_autoregressive=False
             mask_ratio = torch.mean(section_mask,dim=[1,2])
             step = int(self.inverse_schedule(mask_ratio)*n_sampling_steps)
         
@@ -289,6 +283,7 @@ if __name__ == "__main__":
 
 
     ds = NoteDataset(prepared_data_path="data/prepared_vast+gamer_noteseq_data.pt", crop_size=36)
+    # ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
 
     dl = torch.utils.data.DataLoader(ds, batch_size=512, shuffle=True, num_workers=20)
 
