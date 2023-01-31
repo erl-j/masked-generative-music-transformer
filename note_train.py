@@ -74,20 +74,18 @@ def special_loss(logits,target,mask,debug=False):
         if channel == "type":
             loss_mask = masked_target_is_equal
         else:
-            loss_mask = masked_target_is_equal*is_note[:,None,:]
+            loss_mask = masked_target_is_equal*is_note[:,:,None]
 
         # expand the target and logits to have shape (batch_size, pred_timesteps, target_timesteps, n_channels)
         
-        # calculate cross entropy for every logit target pair
-        expanded_logits = logits[channel].unsqueeze(2).expand((batch_size,n_timesteps,n_timesteps,-1))
-        expanded_target = target[channel].unsqueeze(1).expand((batch_size,n_timesteps,n_timesteps,-1))
+        # calculate cross entropy for every combination of target and prediction
+        expanded_target = target[channel][:,:,None,:].expand(-1,-1,n_timesteps,-1).reshape(batch_size*n_timesteps*n_timesteps,-1)
+        expanded_logits = logits[channel][:,None,:,:].expand(-1,n_timesteps,-1,-1).reshape(batch_size*n_timesteps*n_timesteps,-1)
+        channel_loss = F.cross_entropy(expanded_logits, expanded_target, reduction="none")
 
-        channel_loss = torch.nn.functional.cross_entropy(
-            expanded_logits.reshape((batch_size*n_timesteps*n_timesteps,-1)),
-            expanded_target.reshape((batch_size*n_timesteps*n_timesteps,-1)),
-            reduction="none",
-        ).reshape((batch_size,n_timesteps,n_timesteps))
-
+        # reshape the loss to have shape (batch_size, pred_timesteps, target_timesteps)
+        channel_loss = channel_loss.reshape(batch_size,n_timesteps,n_timesteps)
+       
         is_masked = mask[channel].sum(dim=-1)==mask[channel].shape[-1]
 
         loss+=torch.mean(channel_loss*loss_mask.float()*is_masked[:,:,None].float())
@@ -283,7 +281,7 @@ if __name__ == "__main__":
 
 
     ds = NoteDataset(prepared_data_path="data/prepared_vast+gamer_noteseq_data.pt", crop_size=36)
-    # ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
+    #ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
 
     dl = torch.utils.data.DataLoader(ds, batch_size=512, shuffle=True, num_workers=20)
 

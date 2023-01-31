@@ -73,7 +73,7 @@ x["type"][:,:n_notes,1]=0
 section_mask = torch.ones((1,n_timesteps,n_sections))
 section_mask[:,:,0]=0
 
-x = model.generate(temperature=0.5, n_sampling_steps=50, mode="channel", plot=True)
+x = model.generate(temperature=1.0, n_sampling_steps=50, mode="channel", plot=True)
 
 x0 = {key: tensor[0] for key, tensor in x.items()}
 ns = model_format_to_noteseq(x0)
