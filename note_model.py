@@ -45,4 +45,14 @@ class TransformerModel(torch.nn.Module):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
-        return optimizer
+        # multiply lr by 0.9 every 1000 steps
+        sched_config = {
+        'scheduler': torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9),
+        'frequency': 1000,
+        'interval': 'step'
+        }
+
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': sched_config,
+        }

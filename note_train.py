@@ -22,7 +22,7 @@ from collections import OrderedDict
 # make generic so that it accepts a graph with dependencies between the various events/sections
 # recursive perhaps?
 
-def special_loss(logits,target,mask):
+def special_loss(logits,target,mask,debug=False):
     merged_target = merge_channels(target)
     merged_mask = merge_channels(mask)
     merged_logits = merge_channels(logits)
@@ -35,7 +35,45 @@ def special_loss(logits,target,mask):
     masked_target_is_equal = (merged_masked_target.unsqueeze(1)==merged_masked_target.unsqueeze(2)).all(dim=-1)
     is_note = target["type"][:,:,0]==1
 
-    batch_size ,n_timesteps, _ = merged_logits.shape
+    batch_size,n_timesteps, _ = merged_logits.shape
+
+    if debug:
+        # plt.imshow(merged_logits[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
+        # plt.show()
+
+        # print("merged_masked_target", merged_masked_target[0])
+        # plt.imshow(merged_masked_target[0].detach().cpu().numpy(), cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
+        # plt.show()
+
+        for i in range(n_timesteps):
+
+            plt.imshow(merged_masked_target[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
+            # show grid every integer
+            plt.xticks(np.arange(0,n_timesteps+1,1.0))
+            plt.yticks(np.arange(0,merged_logits.shape[-1]+1,1.0))
+            plt.grid(True)
+            # make ticks integers
+            # add a green arrow to show the current timestep
+            plt.arrow(i+0.25,-1,0,0.5,head_width=0.25, head_length=0.5, color="green")
+
+            # add green arrow to every timestep where the masked target is equal
+            for j in range(n_timesteps):
+                if masked_target_is_equal[0,i,j]:
+                    plt.arrow(j+0.75,-1,0,0.5,head_width=0.25, head_length=0.5, color="blue")
+
+            # remove the ticks on the y axis and x axis
+            plt.tick_params(
+                axis='both',          # changes apply to the x-axis
+                which='both',      # both major and minor ticks are affected
+                bottom=False,      # ticks along the bottom edge are off
+                left=False,         # ticks along the left edge are off
+                labelbottom=False, # labels along the bottom edge are off
+                labelleft=False)
+
+
+            plt.show()
+
+
     for channel in logits.keys():
         if channel == "type":
             loss_mask = masked_target_is_equal
@@ -169,6 +207,7 @@ class Model(pl.LightningModule):
         n_cells=n_timesteps*len(x)
 
         if n_sampling_steps==-1:
+            is_autoregressive=True
             step=0
             n_sampling_steps= n_cells
         else:
@@ -179,9 +218,12 @@ class Model(pl.LightningModule):
 
         with torch.no_grad():
             for step in tqdm(range(step,n_sampling_steps)):
-
+                
                 n_masked = int(torch.sum(section_mask).item())
-                n_masked_next = int(np.ceil(self.schedule((step+1)/n_sampling_steps).cpu()*n_cells))
+                if is_autoregressive:
+                    n_masked_next = n_masked-1
+                else:
+                    n_masked_next = int(np.ceil(self.schedule((step+1)/n_sampling_steps).cpu()*n_cells))
 
                 # print n_masked_next, n_masked
                 # print(f"step {step}/{n_sampling_steps} - {n_masked_next-n_masked} cells to mask")
@@ -221,6 +263,10 @@ class Model(pl.LightningModule):
 
                     x[key][:,timestep] = one_hot
                     section_mask[:,index_to_unmask[0],index_to_unmask[1]] = 0
+                
+                if plot:
+                    plt.imshow(section_mask[0].cpu().numpy(),aspect="auto",cmap="gray",interpolation="none")
+                    plt.show()
 
         return x
 
@@ -242,7 +288,7 @@ if __name__ == "__main__":
     np.random.seed(0)
 
 
-    ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data.pt", crop_size=36)
+    ds = NoteDataset(prepared_data_path="data/prepared_vast+gamer_noteseq_data.pt", crop_size=36)
 
     dl = torch.utils.data.DataLoader(ds, batch_size=512, shuffle=True, num_workers=20)
 

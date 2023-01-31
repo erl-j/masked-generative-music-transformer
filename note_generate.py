@@ -54,7 +54,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = Model(token_sections = ds.get_token_sections(), n_layers=4,n_hidden_size=512)
-ckpt_path =glob.glob("lightning_logs/ck3m2lmn/checkpoints/*.ckpt")[0]
+ckpt_path =glob.glob("lightning_logs/1hxee0da/checkpoints/*.ckpt")[0]
 
 model.load_state_dict(torch.load(ckpt_path,map_location=torch.device(device))['state_dict'])
 # %%
@@ -63,7 +63,7 @@ x = batch
 n_timesteps = x["type"].shape[1]
 n_sections = len(x)
 
-n_notes=20
+n_notes=1
 x["type"]=torch.zeros_like(torch.tensor(x["type"]))
 x["type"][:,:,0]=0
 x["type"][:,:,1]=1
@@ -73,7 +73,7 @@ x["type"][:,:n_notes,1]=0
 section_mask = torch.ones((1,n_timesteps,n_sections))
 section_mask[:,:,0]=0
 
-x = model.generate(x=x,section_mask=section_mask,temperature=1.0, n_sampling_steps=30, mode="channel")
+x = model.generate(x=x,section_mask=section_mask,temperature=1.0, n_sampling_steps=10, mode="channel", plot=True)
 
 x0 = {key: tensor[0] for key, tensor in x.items()}
 ns = model_format_to_noteseq(x0)
