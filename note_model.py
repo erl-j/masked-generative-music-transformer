@@ -1,11 +1,5 @@
-import os
-
-import einops
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
 
 class TransformerModel(torch.nn.Module):
     def __init__(self, n_channels,n_layers,n_hidden_size):
@@ -32,7 +26,7 @@ class TransformerModel(torch.nn.Module):
     def forward(self,x,mask):
         batch_size = x.shape[0]
         # set masked to -1
-        masked_x = (1-mask)*x + mask*-1
+        masked_x = (1-mask)*x - mask
 
         embed = self.embedding_layer(masked_x)
 
@@ -43,16 +37,5 @@ class TransformerModel(torch.nn.Module):
 
         return y
 
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-4)
-        # multiply lr by 0.9 every 1000 steps
-        sched_config = {
-        'scheduler': torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9),
-        'frequency': 1000,
-        'interval': 'step'
-        }
-
-        return {
-            'optimizer': optimizer,
-            'lr_scheduler': sched_config,
-        }
+   
+    

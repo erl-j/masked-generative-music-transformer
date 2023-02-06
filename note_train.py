@@ -17,100 +17,12 @@ from torch.nn import functional as F
 from note_model import TransformerModel
 import glob
 import datetime
+from note_util import merge_channels, split_channels
 from collections import OrderedDict
+from note_loss import special_loss_parallel
 
 # make generic so that it accepts a graph with dependencies between the various events/sections
 # recursive perhaps?
-
-def special_loss(logits,target,mask,debug=False):
-    merged_target = merge_channels(target)
-    merged_mask = merge_channels(mask)
-    merged_logits = merge_channels(logits)
-    loss=0
-    merged_masked_target = merged_target*(1-merged_mask)+(merged_mask*-1)
-    # matrix of shape (batch_size, pred_timesteps, target_timesteps) 
-    # where each element is 1 if the masked target is equal and 0 otherwise
-    masked_target_is_equal = (merged_masked_target.unsqueeze(1)==merged_masked_target.unsqueeze(2)).all(dim=-1)
-    is_note = target["type"][:,:,0]==1
-    batch_size,n_timesteps, _ = merged_logits.shape
-    
-    if debug:
-        for i in range(n_timesteps):
-            plt.title("merged_target")
-            plt.imshow(merged_target[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
-            plt.show()
-        
-            plt.title("merged_mask")
-            plt.imshow(merged_mask[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
-            plt.show()
-
-            plt.title("merged_masked_target")
-            plt.imshow(merged_masked_target[0].detach().cpu().numpy().T, cmap="gray", interpolation="none",aspect="auto", extent=(0,n_timesteps,0,merged_logits.shape[-1]))
-            # show grid every integer
-            plt.xticks(np.arange(0,n_timesteps+1,1.0))
-            plt.yticks(np.arange(0,merged_logits.shape[-1]+1,1.0))
-            plt.grid(True)
-            # make ticks integers
-            # add a green arrow to show the current timestep
-            plt.arrow(i+0.25,-1,0,0.5,head_width=0.25, head_length=0.5, color="green")
-
-            # add green arrow to every timestep where the masked target is equal
-            for j in range(n_timesteps):
-                if masked_target_is_equal[0,i,j]:
-                    plt.arrow(j+0.75,-1,0,0.5,head_width=0.25, head_length=0.5, color="blue")
-
-            # remove the ticks on the y axis and x axis
-            plt.tick_params(
-                axis='both',          # changes apply to the x-axis
-                which='both',      # both major and minor ticks are affected
-                bottom=False,      # ticks along the bottom edge are off
-                left=False,         # ticks along the left edge are off
-                labelbottom=False, # labels along the bottom edge are off
-                labelleft=False)
-                
-            plt.show()
-
-    for channel in logits.keys():
-        if channel == "type":
-            loss_mask = masked_target_is_equal
-        else:
-            loss_mask = masked_target_is_equal*is_note[:,:,None]
-
-        # expand the target and logits to have shape (batch_size, pred_timesteps, target_timesteps, n_channels)
-        
-        # calculate cross entropy for every combination of target and prediction
-        expanded_target = target[channel][:,:,None,:].expand(-1,-1,n_timesteps,-1).reshape(batch_size*n_timesteps*n_timesteps,-1)
-        expanded_logits = logits[channel][:,None,:,:].expand(-1,n_timesteps,-1,-1).reshape(batch_size*n_timesteps*n_timesteps,-1)
-        channel_loss = F.cross_entropy(expanded_logits, expanded_target, reduction="none")
-
-        # reshape the loss to have shape (batch_size, pred_timesteps, target_timesteps)
-        channel_loss = channel_loss.reshape(batch_size,n_timesteps,n_timesteps)
-       
-        is_masked = mask[channel].sum(dim=-1)==mask[channel].shape[-1]
-
-        loss+=torch.mean(channel_loss*loss_mask.float()*is_masked[:,:,None].float())
-    return loss
-
-def merge_channels(seq, total_size=None):
-    if total_size is None:
-        total_size = sum([value.shape[-1] for key, value in seq.items()])
-    batch_size, n_timesteps,_ = next(iter(seq.items()))[1].shape
-    seq_device = next(iter(seq.items()))[1].device
-    merged_seq = torch.zeros((batch_size,n_timesteps,total_size),device=seq_device)
-    offset=0
- 
-    for key, value in seq.items():
-        merged_seq[...,offset:offset+value.shape[-1]] = seq[key]
-        offset+=value.shape[-1]
-    return merged_seq
-
-def split_channels(seq, token_sections):
-    split_seq = OrderedDict()
-    offset=0
-    for token_section in token_sections:
-        split_seq[token_section["label"]] = seq[...,offset:offset+token_section["n_channels"]]
-        offset+=token_section["n_channels"]
-    return split_seq
 
 class Model(pl.LightningModule):
     def __init__(self, token_sections, n_layers=None,n_hidden_size=None, masking_mode="channel"):
@@ -126,9 +38,6 @@ class Model(pl.LightningModule):
     def forward(self,x,mask):
         y = self.model(x,mask)
         return y
-    
-    def compute_loss(self, logits, targets, mask):
-        return special_loss(logits,targets,mask)
 
     def training_step(self, batch, batch_idx):
         # get data
@@ -166,11 +75,13 @@ class Model(pl.LightningModule):
 
         logits = split_channels(merged_logits,self.token_sections)
 
-        loss = self.compute_loss(logits,seq,mask)
+        loss = special_loss_parallel(logits,seq,mask)
         timeb = datetime.datetime.now()
         # print(timeb-timea)
         # log loss
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+
+        self.log("learning_rate",self.trainer.optimizers[0].param_groups[0]["lr"],on_step=True, on_epoch=True, prog_bar=True, logger=True)
 
         return loss
 
@@ -267,7 +178,20 @@ class Model(pl.LightningModule):
             return self.generate_with_channel_mode(x,section_mask,temperature,n_sampling_steps,plot)
             
     def configure_optimizers(self):
-        return self.model.configure_optimizers()
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-5)
+        self.optimizer= optimizer
+        # multiply lr by 0.97 every 1000 steps
+        # return {
+        #     'optimizer': optimizer,
+        #     'lr_scheduler':  {
+        #     "interval": "epoch",
+        #     "scheduler": torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: 1e-6 + 1e-4 * 0.8 ** epoch),
+        #     'frequency': 1,
+        #     "name": "learning_rate",
+        #     }
+        # }
+        return optimizer
+
 
 class DemoCallback(pl.Callback):
 
@@ -283,7 +207,7 @@ if __name__ == "__main__":
     ds = NoteDataset(prepared_data_path="data/prepared_vast+gamer_noteseq_data.pt", crop_size=36)
     #ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
 
-    dl = torch.utils.data.DataLoader(ds, batch_size=512, shuffle=True, num_workers=20)
+    dl = torch.utils.data.DataLoader(ds, batch_size=128, shuffle=True, num_workers=1)
 
     wandb_logger = WandbLogger()
     

@@ -14,6 +14,7 @@ from note_train import Model
 from util import crop_roll_128_to_88, noteseq_to_roll, pad_roll_88_to_128
 
 
+
 def play_audio(audio):
     display(Audio(audio, rate=44100))
 
@@ -32,7 +33,7 @@ def play_roll(roll):
 #%%
 ds = NoteDataset(prepared_data_path="data/prepared_gamer_noteseq_data_1000.pt", crop_size=36)
 
-dl = torch.utils.data.DataLoader(ds, batch_size=1, shuffle=False)
+dl = torch.utils.data.DataLoader(ds, batch_size=1, shuffle=True)
 
 batch = next(iter(dl))["seq"]
 
@@ -40,12 +41,14 @@ sample = {k:v[0] for k,v in batch.items()}
 
 ns = model_format_to_noteseq(sample)
 
-
 ns = [{**n,"velocity":127} for n in ns]
 roll = noteseq_to_roll(ns,36,64)
 
 plt.imshow(roll)
 plt.show()
+
+play_roll(torch.tensor(roll))
+
 
 #%%
 #%%
@@ -54,7 +57,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model = Model(token_sections = ds.get_token_sections(), n_layers=4,n_hidden_size=512)
-ckpt_path =glob.glob("lightning_logs/5xmyy3uj/checkpoints/*.ckpt")[0]
+ckpt_path =glob.glob("lightning_logs/1g0lfnl1/checkpoints/*.ckpt")[0]
 
 model.load_state_dict(torch.load(ckpt_path,map_location=torch.device(device))['state_dict'])
 # %%
@@ -63,7 +66,7 @@ x = batch
 n_timesteps = x["type"].shape[1]
 n_sections = len(x)
 
-n_notes=1
+n_notes=10
 x["type"]=torch.zeros_like(torch.tensor(x["type"]))
 x["type"][:,:,0]=0
 x["type"][:,:,1]=1
@@ -73,7 +76,7 @@ x["type"][:,:n_notes,1]=0
 section_mask = torch.ones((1,n_timesteps,n_sections))
 section_mask[:,:,0]=0
 
-x = model.generate(temperature=1.0, n_sampling_steps=50, mode="channel", plot=True)
+x = model.generate(temperature=0.5, n_sampling_steps=50, mode="channel")
 
 x0 = {key: tensor[0] for key, tensor in x.items()}
 ns = model_format_to_noteseq(x0)
@@ -86,5 +89,6 @@ plt.show()
 print(len(ns))
 
 play_roll(torch.tensor(roll))
+
 
 # %%

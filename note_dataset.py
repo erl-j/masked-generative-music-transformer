@@ -10,6 +10,8 @@ def onehot(idx,n_values):
 def onehot_to_index(onehot):
     return np.argmax(onehot)
 
+
+
 def model_format_to_noteseq(x):
     """
     Converts a model input format to a note sequence.
