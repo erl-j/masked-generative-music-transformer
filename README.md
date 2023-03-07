@@ -27,12 +27,16 @@ If you found this project useful for you research, please cite:
 
 
 ```BibTex
-@software{Jonason_Masked_Generative_Music_2023,
-author = {Jonason, Nicolas},
-doi = {10.5281/zenodo.7703863},
-month = {3},
-title = {{Masked Generative Music Transformer}},
-version = {first},
-year = {2023}
+@software{nicolas_jonason_2023_7703864,
+  author       = {Nicolas Jonason and
+                  Bob L.T. Sturm},
+  title        = {{erl-j/masked-generative-music-transformer: 
+                   Original release}},
+  month        = mar,
+  year         = 2023,
+  publisher    = {Zenodo},
+  version      = {first},
+  doi          = {10.5281/zenodo.7703864},
+  url          = {https://doi.org/10.5281/zenodo.7703864}
 }
 ```
