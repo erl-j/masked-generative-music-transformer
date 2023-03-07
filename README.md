@@ -1,8 +1,10 @@
 # Masked Generative Music Transformer
 
-[## 🎹 Browser demo](https://erl-j.github.io/loop-savant/)
-
 [![DOI](https://zenodo.org/badge/591120173.svg)](https://zenodo.org/badge/latestdoi/591120173)
+
+## [🎹 Browser demo](https://erl-j.github.io/loop-savant/)
+
+
 
 This project applies techniques from MaskGIT [1] / Muse [2] to symbolic music.
 
