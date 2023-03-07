@@ -17,7 +17,19 @@ The goal of the project is to apply a pretrained model to tasks such as:
 
 We are also working on applying the model to other music representations.
 
-An Arxiv paper is on the way.
-
 [1]: https://arxiv.org/abs/2202.04200
 [2]: https://arxiv.org/abs/2301.00704
+
+If you found this project useful for you research, please cite:
+
+
+```BibTex
+@software{Jonason_Masked_Generative_Music_2023,
+author = {Jonason, Nicolas},
+doi = {10.5281/zenodo.7703863},
+month = {3},
+title = {{Masked Generative Music Transformer}},
+version = {first},
+year = {2023}
+}
+```
