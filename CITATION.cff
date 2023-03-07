@@ -4,8 +4,7 @@ authors:
   - family-names: Jonason
     given-names: Nicolas
     orcid: https://orcid.org/0000-0000-0000-0000
-title: erl-j/masked-generative-music-transformer: Original release
+title: Masked Generative Music Transformer
 version: first
 date-released: 2023-03-07
 doi: 10.5281/zenodo.7703863
-            
