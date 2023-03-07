@@ -1,5 +1,7 @@
 # Masked Generative Music Transformer
 
+[![DOI](https://zenodo.org/badge/591120173.svg)](https://zenodo.org/badge/latestdoi/591120173)
+
 This project applies techniques from MaskGIT [1] / Muse [2] to symbolic music.
 
 ![](misc/gen.gif)
