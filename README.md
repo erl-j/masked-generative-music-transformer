@@ -1,4 +1,4 @@
-# Masked Generative Music Transformer
+# MGMT - Masked Generative Music Transformer
 
 [![DOI](https://zenodo.org/badge/591120173.svg)](https://zenodo.org/badge/latestdoi/591120173)
 
