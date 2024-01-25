@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import einops
-import torchtext
 from torch import nn
 import os
 import pytorch_lightning as pl
@@ -14,8 +13,9 @@ from pytorch_lightning.loggers import WandbLogger
 from tqdm import tqdm
 import wandb
 from torch.nn import functional as F
-from model import TransformerModel, MLPModel
+from model import TransformerModel, MLPModel, UnetModel
 import glob
+from unet import UNet2D
 
 def piano_roll_to_model_format( piano_roll):
     on = (piano_roll>0).float()
@@ -29,7 +29,7 @@ def model_format_to_piano_roll(onoff):
     return on*127.0
 
 class Model(pl.LightningModule):
-    def __init__(self, n_pitches,n_timesteps, architecture="transformer",n_layers=None,n_hidden_size=None):
+    def __init__(self, n_pitches,n_timesteps, architecture="transformer",n_layers=None, n_hidden_size=None, conv_depths=None):
         super().__init__()
         self.n_pitches = n_pitches
         self.n_timesteps = n_timesteps
@@ -39,6 +39,8 @@ class Model(pl.LightningModule):
             self.model = TransformerModel(self.n_pitches,self.n_timesteps,n_layers=n_layers,n_hidden_size=n_hidden_size)
         elif architecture == "mlp":
             self.model = MLPModel(self.n_pitches,self.n_timesteps)
+        elif architecture == "unet":
+            self.model = UnetModel(n_pitches=n_pitches,n_timesteps=n_timesteps, n_hidden_size=n_hidden_size, conv_depths=conv_depths)
 
     def forward(self,x,mask):
         y, y_prob = self.model(x,mask)
@@ -179,7 +181,6 @@ class Model(pl.LightningModule):
                     plt.savefig(f"artefacts/gif/plot_{step}.png")
                     plt.show()
 
-
                 # get sample 
                 sample = flat_mask * sample + (1-flat_mask) * flat_x
 
@@ -205,8 +206,6 @@ class Model(pl.LightningModule):
                     # unmask
                     new_mask[:,unmask_indices,:] = 0
 
-
-                    
                 flat_x = flat_x*new_mask + (1-new_mask) * sample
 
                 assert torch.all(torch.sum(x,axis=-1) == 1)
@@ -244,8 +243,6 @@ class Model(pl.LightningModule):
 
             plt.savefig(f"artefacts/gif/plot_{step+1}.png")
             plt.show()
-
-
 
         assert torch.all(mask) == 0
 
@@ -285,10 +282,10 @@ if __name__ == "__main__":
 
     dss = []
     if dataset == "gamer":
-        ds = MidiDataset(prepared_data_path="data/prepared_gamer_data.pt",crop_size=CROP_SIZE,downsample_factor=DOWNSAMPLE_FACTOR)
+        ds = MidiDataset(prepared_data_path="../data/prepared_gamer_data.pt",crop_size=CROP_SIZE,downsample_factor=DOWNSAMPLE_FACTOR)
         dss.append(ds)
     if (dataset == "vast") or (dataset == "vast+gamer"):
-        fps = glob.glob("data/vast/*.pt")
+        fps = glob.glob("../data/vast/*.pt")
         for fp in fps:
             ds = MidiDataset(prepared_data_path=fp,crop_size=CROP_SIZE,downsample_factor=DOWNSAMPLE_FACTOR)
             dss.append(ds)
@@ -304,8 +301,13 @@ if __name__ == "__main__":
 
     wandb_logger = WandbLogger()
     
-    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],gpus=[1],log_every_n_steps=1)
-    model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, architecture="transformer",n_layers=4,n_hidden_size=256)
+    trainer = pl.Trainer(logger=wandb_logger, callbacks=[],devices=[3],log_every_n_steps=1)
+
+    hidden_size = 16
+    # power of two
+    conv_depths = [ hidden_size * 2**i for i in range(5) ]
+    model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, n_hidden_size=hidden_size, conv_depths=conv_depths, architecture="unet")
+    # model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, architecture="unet",n_layers=4,n_hidden_size=256)
     # model = Model(n_pitches=n_pitches,n_timesteps=n_timesteps, architecture="transformer",n_layers=2,n_hidden_size=256)
 
     #model.load_state_dict(torch.load("lightning_logs/1x3pz8xi/checkpoints/epoch=27-step=15764.ckpt")["state_dict"])

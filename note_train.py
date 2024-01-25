@@ -14,7 +14,7 @@ from pytorch_lightning.loggers import WandbLogger
 from tqdm import tqdm
 import wandb
 from torch.nn import functional as F
-from note_model import TransformerModel
+from notenet import TransformerModel
 import glob
 import datetime
 from note_util import merge_channels, split_channels
